@@ -1,0 +1,184 @@
+package org.jivesoftware;
+
+
+import java.io.BufferedReader;
+import java.io.IOException;
+
+import org.jivesoftware.smack.packet.Message;
+import java.io.InputStreamReader;
+import java.util.Collection;
+
+import javax.security.auth.login.Configuration;
+
+import org.jivesoftware.smack.AbstractXMPPConnection;
+import org.jivesoftware.smack.PacketCollector;
+import org.jivesoftware.smack.PacketListener;
+import org.jivesoftware.smack.XMPPException;
+import org.jivesoftware.smack.ConnectionConfiguration.SecurityMode;
+import org.jivesoftware.smack.SmackException.NotConnectedException;
+import org.jivesoftware.smack.chat.Chat;
+import org.jivesoftware.smack.chat.ChatManager;
+import org.jivesoftware.smack.chat.ChatMessageListener;
+import org.jivesoftware.smack.filter.AndFilter;
+import org.jivesoftware.smack.filter.PacketFilter;
+import org.jivesoftware.smack.filter.PacketTypeFilter;
+
+import org.jivesoftware.smack.packet.Packet;
+import org.jivesoftware.smack.packet.Presence.Type;
+import org.jivesoftware.smack.packet.Stanza;
+import org.jivesoftware.smack.roster.Roster;
+import org.jivesoftware.smack.roster.RosterEntry;
+import org.jivesoftware.smack.tcp.XMPPTCPConnection;
+import org.jivesoftware.smack.tcp.XMPPTCPConnectionConfiguration;
+import org.jivesoftware.smackx.muc.MultiUserChat;
+import org.jivesoftware.spark.ui.ChatRoom;
+import org.jivesoftware.spark.ui.MessageListener;
+
+public class SmackClientTester implements ChatMessageListener {
+	
+	static AbstractXMPPConnection connection;
+	
+	public static void sendingAndReceiving(SmackClientTester c) {
+		
+		
+        AndFilter filter = new AndFilter(new PacketTypeFilter(Message.class));
+        PacketCollector collector = connection.createPacketCollector(filter);
+        BufferedReader br = new BufferedReader(new InputStreamReader(System.in));
+        
+        System.out.println("Who do you want to talk to? - Type contacts full email address:");
+		
+        String talkTo = null;
+		try {
+			talkTo = br.readLine();
+		} catch (IOException e1) {
+			// TODO Auto-generated catch block
+			e1.printStackTrace();
+		}
+        
+		System.out.println("All messages will be sent to " + talkTo);
+		System.out.println("Enter your message in the console:");
+		System.out.println("-----\n");
+        
+		String msg;
+       
+        while (true) {
+        	
+        	Packet packet = collector.pollResult();
+        	
+            
+            if(packet!=null) 
+            {
+            	if (packet instanceof Message) {
+                    Message message = (Message) packet;
+                    if (message != null && message.getBody() != null)
+                        System.out.println("Received message from "
+                                + packet.getFrom() + " : "
+                                + (message != null ? message.getBody() : "NULL"));
+                }
+            }
+            
+            if(packet==null || !(packet instanceof Message))
+            	{
+            		try {
+        				if(br.ready()) {
+        					
+        					msg = br.readLine();
+        					if(msg .equals("bye"))break;
+        					
+        					try {
+        						c.sendMessage(msg, talkTo);
+        					} catch (NotConnectedException | XMPPException e) {
+        						// TODO Auto-generated catch block
+        						e.printStackTrace();
+        					}
+        					
+        				}
+        				} catch (IOException e) {
+        					// TODO Auto-generated catch block
+        					e.printStackTrace();
+        				}
+            	}
+            
+            	          
+        }
+    }
+	public void login(String userName, String password) throws Exception {
+		
+		XMPPTCPConnectionConfiguration config = XMPPTCPConnectionConfiguration.builder()
+				  .setUsernameAndPassword("mrinal", "mrinal")
+				  .setServiceName("192.168.4.122")
+				  .setHost("192.168.4.122")
+				  .setPort(5222)
+				  .setSecurityMode(SecurityMode.disabled) // Do not disable TLS except for test purposes!
+				  .setDebuggerEnabled(true)
+				  .build();
+
+		connection = new XMPPTCPConnection(config);
+		connection.connect().login();
+		
+        
+		//MyReader myReader= new MyReader(config);
+		//myReader.connectInternal();
+	}
+
+	/**
+	 * Sends the specified text as a message to the other chat participant.
+	 * 
+	 * @param message
+	 * @param to
+	 * @throws XMPPException
+	 * @throws NotConnectedException
+	 */
+	public void sendMessage(String message, String to) throws XMPPException, NotConnectedException {
+		ChatManager chatManager = ChatManager.getInstanceFor(connection);
+		Chat chat = chatManager.createChat(to, this); // pass XmppClient instance as listener for received messages.
+		chat.sendMessage(message);
+	}
+	
+	/**
+	 * Displays received messages
+	 */
+	public void processMessage(Chat chat, Message message) {
+		if (message.getType() == Message.Type.chat) {
+			System.out.println(chat.getParticipant() + " says: " + message.getBody());
+		}
+	}
+
+	/**
+	 * Displays users (entries) in the roster
+	 */
+	public void displayBuddyList() {
+		Roster roster = Roster.getInstanceFor(connection);
+		Collection<RosterEntry> entries = roster.getEntries();
+
+		System.out.println("\n\n" + entries.size() + " buddy(ies):");
+		for (RosterEntry r : entries) {
+			String user = r.getUser();
+			Type presenceType = roster.getPresence(user).getType();
+			System.out.println(user + ":" + presenceType);
+		}
+	}
+	
+	public void disconnect() {
+		connection.disconnect();
+	}
+	
+	public static void main(String args[]) throws Exception {
+
+		SmackClientTester c = new SmackClientTester();
+		
+		
+
+		// Enter your login information here
+		c.login("user1", "s0meP@ssW0rD");
+		
+		// Display online users
+		c.displayBuddyList();
+		
+		sendingAndReceiving(c);
+
+		c.disconnect();
+		System.exit(0);
+	}
+
+}
